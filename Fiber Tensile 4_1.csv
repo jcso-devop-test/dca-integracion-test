@@ -1,0 +1,8 @@
+Sample file name,System ID,Method name only,Geometry,Length,Fixture profile,Grip pressure,Automatic positioning,Preload,Value,Auto balance,Cycles,Control mode,Minimum value,Maximum value,Rate,Run as a prompted test,User,
+,,,,(mm),,(psi),,,(N),,,,(%),(%),(mm/min),,,
+,68SC5B23761,Nick - CC_FiberHYSTERESIS - V1,Fiber,20,"50N Grips + 50N Load Cell, 20mm Gap Width",50,VERDADERO,VERDADERO,0.02,VERDADERO,1,Displacement,0,200,100,FALSO,nawad,
+,,,,,,,,,,,,,,,,,,
+Results Table 1,,,,,,,,,,,,,,,,,,
+,LIMS ID,BLA,Sample,Replicate,Linear density,Permanent Set [%],% Hysteresis Cycle 1,% Hysteresis Cycle 2,% Hysteresis Cycle 3,Tenacity at Tensile strength,Displacement at Hold preset point (Cursor),Grip pressure,Pass/Fail,Excluded,Notes,Start date,Operator,Project
+,,,,,(den),,,,,(mN/tex),(mm),(psi),,,,,,
+1,22-123,1234,1,1,800,80.47,81.78,60.16,99.1,85.29,17.57,50,Inactive,Include,,7/5/2022 8:39,<None>,<None>

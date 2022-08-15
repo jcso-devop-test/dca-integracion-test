@@ -1,0 +1,13 @@
+Sample file name,System ID,Method name only,Geometry,Length,Fixture profile,Grip pressure,Automatic positioning,Preload,Value,Auto balance,Run as a prompted test,Rate 1,User,,,,,,,,;
+,,,,(mm),,(psi),,,(N),,,(mm/min),,,,,,,,,;
+",68SC5B23761,Nick Fiber_Yarn Tensile Test 1 - V1,Fiber,20,""50N Grips + 50N Load Cell, 20mm Gap Width"",60,VERDADERO,VERDADERO,0.25,VERDADERO,FALSO,100,nawad,,,,,,,,";
+,,,,,,,,,,,,,,,,,,,,,;
+Results Table 1,,,,,,,,,,,,,,,,,,,,,;
+,LIMS ID,BLA,Sample,Replicate,Linear density,Tensile strain (Displacement) at Break (Standard),Maximum Tenacity,Tenacity at Preset point (Tensile strain (Displacement) 100 %),Tenacity at Preset point (Tensile strain (Displacement) 200 %),Tenacity at Preset point (Tensile strain (Displacement) 300 %),Tenacity at Yield (Zero slope),Tensile strain (Displacement) at Yield (Zero slope),Force at Tensile strength,Displacement at Break (Standard),Grip pressure,Pass/Fail,Excluded,Specimen Notes,Test Date,Operator,Project;
+,,,,,(den),(%),(cN/tex),(cN/tex),(cN/tex),(cN/tex),(cN/tex),(%),(cN),(mm),(psi),,,,,,;
+1,22-123,BLA1234,1,1,800,241.41,9.68,5.5,8.71,-----,-----,-----,860.72,51.14,60,Inactive,Include,,7/5/2022 8:59,Namya Zurita-Torres,<None>;
+1,22-126,BLA1235,1,1,801,242.42,10.69,6.6,9.71,-----,-----,-----,861.73,52.14,61,Inactive,Include,,8/5/2022 9:59,Namya Zurita-Torres,<None>;
+1,22-126,BLA1236,2,2,802,242.43,7.68,4.5,7.71,-----,-----,-----,859.71,50.14,59,Inactive,Include,,6/4/2022 7:59,Namya Zurita-Torres,<None>;
+;
+;
+;

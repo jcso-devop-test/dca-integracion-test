@@ -1,0 +1,369 @@
+package routines;
+
+import com.opencsv.CSVReader;
+import labvantage.limsci.lvws.WSProvider;
+import org.apache.commons.collections.MultiMap;
+import org.apache.commons.collections.map.MultiValueMap;
+import sapphire.SapphireException;
+import sapphire.util.DataSet;
+
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
+
+public class ImportDynamicDataCVS {
+
+
+    public static final int DATA_START = 2;
+    public static final int INITIAL_KEY = 0;
+    public static final int CHARACTER_LIMIT = 40;
+    public static final String LIMS_ID = "LIMS ID";
+    public static final String REPLICATE = "Replicate";
+    public static final String BLA = "BLA";
+    public static final String INSTRUMENTFIELD = "intrumentfield";
+    public static final String VALUE = "value";
+    public static final String UNITS = "units";
+    public static final String SAMPLE = "SAMPLE";
+    public static final String REPLACE_REGEX = "[µ~`^|()\\[\\]\\{\\}\"\\\\]";
+    public static WSProvider utils = null;
+    private final static String DRIVER_NAME = "INSTRON TENSIL";
+    private static String pivotSampleRefence = "";
+    private static int pivotReplicateReference = 0;
+    private static int replicate = 0;
+
+    public static DataSet processRawData(String pathFile){
+
+
+        String[] nextRecord;
+        int numberLine = INITIAL_KEY;
+        List<Map<Integer, Map<Integer, String>>> dataFiles = new ArrayList<>();
+        Map<Integer, String> paramPositionName;
+        MultiMap headerMap = new MultiValueMap();
+        MultiMap tableMap = new MultiValueMap();
+        int posEndHeader = 0;
+
+
+        try(CSVReader reader = new CSVReader(new FileReader(pathFile))) {
+
+            while((nextRecord = reader.readNext()) != null){
+                numberLine++;
+
+                if(Arrays.toString(nextRecord).contains("Results Table 1")){
+                    posEndHeader = numberLine;
+                }
+
+                paramPositionName = getParamNameAndPosition(nextRecord);
+                dataFiles.add(getDataFile(numberLine, paramPositionName));
+
+            }
+
+            if(dataFiles.isEmpty()){
+                throw new SapphireException(DRIVER_NAME  +":::ERROR:: file is empty, is aborted");
+            }
+
+            loadDataMultiMap(dataFiles, headerMap, tableMap, posEndHeader);
+
+           return setDataRow(headerPropertyList(headerMap), tablePropertyList(tableMap));
+
+
+        } catch (FileNotFoundException e) {
+            throw new RuntimeException(e);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } catch (SapphireException e) {
+            throw new RuntimeException(e);
+        }
+
+    }
+
+    private static DataSet setDataRow(List<Map<String, String>> headerResult, List<Map<String, String>> tableResult) {
+
+        List<String> referenceSample = new ArrayList<>();
+        List<String> referenceReplicate = new ArrayList<>();
+
+        DataSet dataSet = new DataSet();
+
+        dataSet.addColumn("sdcid", 0);
+        dataSet.addColumn("keyid1", 0);
+        dataSet.addColumn("dataset", 0);
+        dataSet.addColumn("instrumentfield", 0);
+        dataSet.addColumn(VALUE, 0);
+        dataSet.addColumn(UNITS, 0);
+
+
+        tableResult
+                .stream()
+                .filter(m -> m.get(INSTRUMENTFIELD).equals(LIMS_ID))
+                .forEach(m -> referenceSample.add(m.get(VALUE)));
+
+        tableResult
+                .stream()
+                .filter(m -> m.get(INSTRUMENTFIELD).equals(REPLICATE))
+                .forEach(m -> referenceReplicate.add(m.get(VALUE)));
+
+        AtomicInteger dataRefe = new AtomicInteger();
+        AtomicInteger row = new AtomicInteger();
+        referenceSample.stream()
+                .forEach(sample -> {
+
+                    headerResult.stream()
+                            .filter(m -> !m.get(INSTRUMENTFIELD).equalsIgnoreCase("Method name only") && m.get(INSTRUMENTFIELD).replace(";", "").length()>0 )
+                            .forEach(m -> {
+                                row.set(dataSet.addRow());
+                                dataSet.setValue(row.get(), "sdcid", "sample");
+                                dataSet.setValue(row.get(), "keyid1", sample);
+                                dataSet.setValue(row.get(), "dataset", referenceReplicate.get(dataRefe.get()));
+                                dataSet.setValue(row.get(), "instrumentfield", m.get(INSTRUMENTFIELD));
+                                dataSet.setValue(row.get(), "value", m.get(VALUE));
+                                dataSet.setValue(row.get(), "units", m.get(UNITS));
+
+                            });
+
+                    tableResult
+                            .stream()
+                            .filter(m -> !m.get(INSTRUMENTFIELD).equalsIgnoreCase(LIMS_ID)
+                                    && !m.get(INSTRUMENTFIELD).equalsIgnoreCase(REPLICATE)
+                                    && m.get(SAMPLE).equalsIgnoreCase(sample)
+                                    && m.get(REPLICATE).equalsIgnoreCase(referenceReplicate.get(dataRefe.get())))
+                            .forEach(m -> {
+
+                                if(m.containsKey(INSTRUMENTFIELD)) {
+                                    row.set(dataSet.addRow());
+
+                                    dataSet.setValue(row.get(), "sdcid", "sample");
+                                    dataSet.setValue(row.get(), "keyid1", sample);
+                                    dataSet.setValue(row.get(), "dataset", referenceReplicate.get(dataRefe.get()));
+                                    dataSet.setValue(row.get(), "instrumentfield", m.get(INSTRUMENTFIELD));
+                                    dataSet.setValue(row.get(), "value", m.get(VALUE));
+                                    dataSet.setValue(row.get(), "units", m.get(UNITS));
+                                }
+
+                            });
+
+                    dataRefe.getAndIncrement();
+                });
+
+
+        System.out.println(dataSet);
+        return dataSet;
+    }
+
+
+    private static List<Map<String, String>> headerPropertyList(MultiMap header){
+
+        List<Map<String, String>> headerResult = new ArrayList<>();
+
+        //remove first element
+        header.remove(INITIAL_KEY);
+
+        Set<Integer> keys = header.keySet();
+        for (Integer key: keys
+        ) {
+
+            String[] headerData = String.valueOf(header.get(key)).replaceAll(REPLACE_REGEX,"").split(",");
+
+            Map<String, String> result = new HashMap<>();
+
+               result.put(INSTRUMENTFIELD, characterLimit(headerData[0]));
+               result.put(UNITS, headerData[1].trim());
+               result.put(VALUE, headerData[2].trim());
+
+               headerResult.add(result);
+
+        }
+
+
+        return headerResult;
+
+    }
+
+    private static List<Map<String, String>> tablePropertyList(MultiMap table){
+
+        List<Map<String, String>> tableResult = new ArrayList<>();
+        List<String> sample = new ArrayList<>();
+        List<String> replicates = new ArrayList<>();
+
+
+
+
+        table.remove(INITIAL_KEY);
+
+
+        String[] sampleData = String.valueOf(table.get(1)).replaceAll(REPLACE_REGEX,"").split(",");
+        for(int i = DATA_START; i < sampleData.length; i++){
+            sample.add(sampleData[i].trim());
+        }
+        String[] replicateData = String.valueOf(table.get(4)).replaceAll(REPLACE_REGEX,"").split(",");
+        for(int i = DATA_START; i < replicateData.length; i++){
+            replicates.add(replicateData[i].trim());
+        }
+
+
+        Set<Integer> keys = table.keySet();
+        for (Integer key: keys
+             ) {
+
+            String[] tableData = String.valueOf(table.get(key)).replaceAll(REPLACE_REGEX,"").split(",");
+
+            for(int index = DATA_START; index < tableData.length; index++){
+
+                Map<String, String> result = new HashMap<>();
+
+                    result.put(INSTRUMENTFIELD, characterLimit(tableData[0]));
+                    result.put(UNITS, tableData[1].trim());
+                    result.put(VALUE, tableData[index].trim());
+                    result.put(SAMPLE, sample.get(index - 2));
+                    result.put(REPLICATE, replicates.get(index - 2));
+
+                tableResult.add(result);
+
+            }
+
+        }
+
+        return tableResult;
+    }
+    
+    private static void loadDataMultiMap(List<Map<Integer, Map<Integer, String>>> dataFiles, MultiMap headerMap, MultiMap tableMap, int posEndHeader) throws SapphireException {
+
+        headerMap.clear();
+        tableMap.clear();
+
+        for (Map<Integer, Map<Integer, String>> record:
+                dataFiles) {
+
+            for (Map.Entry<Integer, Map<Integer, String>> entry:
+                    record.entrySet()) {
+                if(entry.getKey() < posEndHeader) {
+                    for (Map.Entry<Integer, String> data :
+                            entry.getValue().entrySet()) {
+                            headerMap.put(data.getKey(), data.getValue());
+
+                    }
+                }
+
+                if(entry.getKey() > posEndHeader){
+
+                    for (Map.Entry<Integer, String> data :
+                            entry.getValue().entrySet()) {
+                         tableMap.put(data.getKey(), getReturnDataValue(data.getKey(), data.getValue().trim()));
+
+                    }
+                }
+
+            }
+
+        }
+
+
+    }
+
+    private static String getReturnDataValue(Integer key, String value) throws SapphireException {
+
+        replicate = validReplicate(key, value);
+
+
+        if(key == 4 && !value.trim().equalsIgnoreCase(REPLICATE)  && value.trim().length() >  0){
+            return String.valueOf(replicate);
+        }
+        if(key == 2 && !value.trim().equalsIgnoreCase(BLA) && value.trim().length() > 0){
+            return removeCharacter(value);
+        }
+
+        if(key == 1 && !value.trim().equalsIgnoreCase(LIMS_ID) && value.trim().length() > 0 ){
+            if(!isValidSample(value.trim())){
+                System.out.println(DRIVER_NAME+":::ERROR:: Sample id =" + value + " is not Valid" );
+                throw new SapphireException(DRIVER_NAME+":::ERROR:: Sample Id =[" +value + "] is not valid, transaction will be aborted");
+            }
+
+        }
+
+        return value;
+
+    }
+
+    private static int validReplicate(Integer key, String value) {
+
+        if(key == 1 && value.trim().equalsIgnoreCase("LIMS ID")){
+            pivotSampleRefence = "";
+            pivotReplicateReference = 0;
+        }
+
+        if(key == 1 && !value.trim().equalsIgnoreCase("LIMS ID")  && value.trim().length() >  0){
+
+            if(!pivotSampleRefence.equals(value)){
+                pivotSampleRefence = value;
+                pivotReplicateReference= 1;
+            }else {
+                pivotReplicateReference++;
+            }
+        }
+        return pivotReplicateReference;
+    }
+
+
+    private static Map<Integer, String> getParamNameAndPosition(String[] arrays){
+        Map<Integer, String> parameter = new HashMap<>();
+        for(int index = 0; index < arrays.length; index++){
+                parameter.put(index, arrays[index]);
+        }
+
+        return parameter;
+    }
+
+
+
+    private static String characterLimit(String value) {
+        if (value.trim().length() > CHARACTER_LIMIT){
+            return value.trim().substring(0, CHARACTER_LIMIT);
+        }
+        return value;
+    }
+
+    private static String removeCharacter(String value){
+        String data = value.trim();
+        if(data.contains(BLA)){
+            return data.substring(3, value.length());
+        }
+        return data;
+    }
+
+
+    private static Map<Integer, Map<Integer, String>> getDataFile(Integer index, Map<Integer, String> resource){
+        Map<Integer, Map<Integer, String>> dataFileReturn = new HashMap<>();
+        dataFileReturn.put(index, resource);
+        return dataFileReturn;
+    }
+
+
+    private static boolean isValidSample(String sampleId) {
+        boolean isValidSaple = true;
+        StringBuffer sql = new StringBuffer();
+        sql.append(" select s_sampleid");
+        sql.append(" from s_sample");
+        sql.append(" where s_sampleid = '");
+        sql.append(sampleId).append("' ");
+
+        //System.out.println("Valid Sample sql="+sql);
+        DataSet dsSample = utils.getSqlDataSet(sql.toString());
+
+
+        if (dsSample.getRowCount()<= 0){
+            isValidSaple =  false;
+        }
+
+        return isValidSaple;
+    }
+    
+
+
+
+
+}
