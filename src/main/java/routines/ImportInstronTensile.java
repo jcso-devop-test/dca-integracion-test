@@ -18,7 +18,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class ImportDynamicDataCVS {
+public class ImportInstronTensile {
 
 
     public static final int DATA_START = 2;
@@ -31,7 +31,7 @@ public class ImportDynamicDataCVS {
     public static final String VALUE = "value";
     public static final String UNITS = "units";
     public static final String SAMPLE = "SAMPLE";
-    public static final String REPLACE_REGEX = "[µ~`^|()\\[\\]\\{\\}\"\\\\]";
+    public static final String REPLACE_REGEX = "[µ~`^|\\[\\]\\{\\}\"\\\\]";
     public static final int EXCLUDE_SAMPLE_COLUMN = 3;
     public static final int REPLICATE_POSITION = 5;
     public static final int BLA_POSITION = 2;
@@ -41,8 +41,9 @@ public class ImportDynamicDataCVS {
     private static String pivotSampleRefence = "";
     private static int pivotReplicateReference = 0;
     private static int replicate = 0;
+    static int replicate_position = 0;
 
-    public static DataSet processRawData(String pathFile){
+    public static DataSet processRawData(String filePath, String instrumentId, String instConnectionId, String connectionId) {
 
 
         String[] nextRecord;
@@ -54,12 +55,12 @@ public class ImportDynamicDataCVS {
         int posEndHeader = 0;
 
 
-        try(CSVReader reader = new CSVReader(new FileReader(pathFile))) {
+        try (CSVReader reader = new CSVReader(new FileReader(filePath))) {
 
-            while((nextRecord = reader.readNext()) != null){
+            while ((nextRecord = reader.readNext()) != null) {
                 numberLine++;
 
-                if(Arrays.toString(nextRecord).contains("Results Table 1")){
+                if (Arrays.toString(nextRecord).contains("Results Table 1")) {
                     posEndHeader = numberLine;
                 }
 
@@ -68,13 +69,13 @@ public class ImportDynamicDataCVS {
 
             }
 
-            if(dataFiles.isEmpty()){
-                throw new SapphireException(DRIVER_NAME  +":::ERROR:: file is empty, is aborted");
+            if (dataFiles.isEmpty()) {
+                throw new SapphireException(DRIVER_NAME + ":::ERROR:: file is empty, is aborted");
             }
 
             loadDataMultiMap(dataFiles, headerMap, tableMap, posEndHeader);
 
-           return setDataRow(headerPropertyList(headerMap), tablePropertyList(tableMap));
+            return setDataRow(headerPropertyList(headerMap), tablePropertyList(tableMap));
 
 
         } catch (FileNotFoundException e) {
@@ -118,7 +119,7 @@ public class ImportDynamicDataCVS {
                 .forEach(sample -> {
 
                     headerResult.stream()
-                            .filter(m -> !m.get(INSTRUMENTFIELD).equalsIgnoreCase("Method name only") && m.get(INSTRUMENTFIELD).replace(";", "").length()>0 )
+                            .filter(m -> !m.get(INSTRUMENTFIELD).equalsIgnoreCase("") && m.get(INSTRUMENTFIELD).replace(";", "").length() > 0)
                             .forEach(m -> {
                                 row.set(dataSet.addRow());
                                 dataSet.setValue(row.get(), "sdcid", "sample");
@@ -132,13 +133,13 @@ public class ImportDynamicDataCVS {
 
                     tableResult
                             .stream()
-                            .filter(m -> !m.get(INSTRUMENTFIELD).equalsIgnoreCase(LIMS_ID)
-                                    && !m.get(INSTRUMENTFIELD).equalsIgnoreCase(REPLICATE)
+                            .filter(m -> !m.get(INSTRUMENTFIELD).equalsIgnoreCase("")
+                                    //&& !m.get(INSTRUMENTFIELD).equalsIgnoreCase(REPLICATE)
                                     && m.get(SAMPLE).equalsIgnoreCase(sample)
                                     && m.get(REPLICATE).equalsIgnoreCase(referenceReplicate.get(dataRefe.get())))
                             .forEach(m -> {
 
-                                if(m.containsKey(INSTRUMENTFIELD)) {
+                                if (m.containsKey(INSTRUMENTFIELD)) {
                                     row.set(dataSet.addRow());
 
                                     dataSet.setValue(row.get(), "sdcid", "sample");
@@ -155,31 +156,31 @@ public class ImportDynamicDataCVS {
                 });
 
 
-        System.out.println(dataSet);
+        //System.out.println(dataSet);
         return dataSet;
     }
 
 
-    private static List<Map<String, String>> headerPropertyList(MultiMap header){
+    private static List<Map<String, String>> headerPropertyList(MultiMap header) {
 
         List<Map<String, String>> headerResult = new ArrayList<>();
 
         //remove first element
-        header.remove(INITIAL_KEY);
+        //header.remove(INITIAL_KEY);
 
         Set<Integer> keys = header.keySet();
-        for (Integer key: keys
+        for (Integer key : keys
         ) {
 
-            String[] headerData = String.valueOf(header.get(key)).replaceAll(REPLACE_REGEX,"").split(",");
+            String[] headerData = String.valueOf(header.get(key)).replaceAll(REPLACE_REGEX, "").split(",");
 
             Map<String, String> result = new HashMap<>();
 
-               result.put(INSTRUMENTFIELD, characterLimit(headerData[0]));
-               result.put(UNITS, headerData[LIMS_ID_POSITION].trim());
-               result.put(VALUE, headerData[BLA_POSITION].trim());
+            result.put(INSTRUMENTFIELD, characterLimit(headerData[0]));
+            result.put(UNITS, headerData[LIMS_ID_POSITION].trim());
+            result.put(VALUE, headerData[BLA_POSITION].trim());
 
-               headerResult.add(result);
+            headerResult.add(result);
 
         }
 
@@ -188,79 +189,78 @@ public class ImportDynamicDataCVS {
 
     }
 
-    private static List<Map<String, String>> tablePropertyList(MultiMap table){
+    private static List<Map<String, String>> tablePropertyList(MultiMap table) {
 
         List<Map<String, String>> tableResult = new ArrayList<>();
         List<String> sample = new ArrayList<>();
         List<String> replicates = new ArrayList<>();
 
 
-
-
         table.remove(INITIAL_KEY);
-        table.remove(EXCLUDE_SAMPLE_COLUMN);
+        //table.remove(replicate_position);
 
 
-
-        String[] sampleData = String.valueOf(table.get(LIMS_ID_POSITION)).replaceAll(REPLACE_REGEX,"").split(",");
-        for(int i = DATA_START; i < sampleData.length; i++){
+        String[] sampleData = String.valueOf(table.get(LIMS_ID_POSITION)).replaceAll(REPLACE_REGEX, "").split(",");
+        for (int i = DATA_START; i < sampleData.length; i++) {
             sample.add(sampleData[i].trim());
         }
-        String[] replicateData = String.valueOf(table.get(REPLICATE_POSITION)).replaceAll(REPLACE_REGEX,"").split(",");
-        for(int i = DATA_START; i < replicateData.length; i++){
+        String[] replicateData = String.valueOf(table.get(replicate_position)).replaceAll(REPLACE_REGEX, "").split(",");
+        for (int i = DATA_START; i < replicateData.length; i++) {
             replicates.add(replicateData[i].trim());
         }
 
 
         Set<Integer> keys = table.keySet();
-        for (Integer key: keys
-             ) {
+        for (Integer key : keys
+        ) {
 
-            String[] tableData = String.valueOf(table.get(key)).replaceAll(REPLACE_REGEX,"").split(",");
+            String[] tableData = String.valueOf(table.get(key)).replaceAll(REPLACE_REGEX, "").split(",");
 
-            for(int index = DATA_START; index < tableData.length; index++){
+            for (int index = DATA_START; index < tableData.length; index++) {
 
                 Map<String, String> result = new HashMap<>();
 
-                    result.put(INSTRUMENTFIELD, characterLimit(tableData[0]));
-                    result.put(UNITS, tableData[LIMS_ID_POSITION].trim());
-                    result.put(VALUE, tableData[index].trim());
-                    result.put(SAMPLE, sample.get(index - BLA_POSITION));
-                    result.put(REPLICATE, replicates.get(index - BLA_POSITION));
+                result.put(INSTRUMENTFIELD, characterLimit(tableData[0]));
+                result.put(UNITS, tableData[LIMS_ID_POSITION].trim());
+                result.put(VALUE, tableData[index].trim());
+                result.put(SAMPLE, sample.get(index - BLA_POSITION));
+                result.put(REPLICATE, replicates.get(index - BLA_POSITION));
 
                 tableResult.add(result);
 
             }
 
         }
-
+        //System.out.println(tableResult);
         return tableResult;
     }
-    
+
     private static void loadDataMultiMap(List<Map<Integer, Map<Integer, String>>> dataFiles, MultiMap headerMap, MultiMap tableMap, int posEndHeader) throws SapphireException {
 
         headerMap.clear();
         tableMap.clear();
 
-        for (Map<Integer, Map<Integer, String>> record:
+        for (Map<Integer, Map<Integer, String>> record :
                 dataFiles) {
 
-            for (Map.Entry<Integer, Map<Integer, String>> entry:
+            for (Map.Entry<Integer, Map<Integer, String>> entry :
                     record.entrySet()) {
-                if(entry.getKey() < posEndHeader) {
+                if (entry.getKey() < posEndHeader) {
                     for (Map.Entry<Integer, String> data :
                             entry.getValue().entrySet()) {
-                            headerMap.put(data.getKey(), data.getValue());
+                        headerMap.put(data.getKey(), data.getValue());
 
                     }
                 }
 
-                if(entry.getKey() > posEndHeader){
+                if (entry.getKey() > posEndHeader) {
 
                     for (Map.Entry<Integer, String> data :
                             entry.getValue().entrySet()) {
-                         tableMap.put(data.getKey(), getReturnDataValue(data.getKey(), data.getValue().trim()));
-
+                        tableMap.put(data.getKey(), getReturnDataValue(data.getKey(), data.getValue().trim()));
+                        if(data.getValue().equalsIgnoreCase(REPLICATE)){
+                            replicate_position = data.getKey();
+                        }
                     }
                 }
 
@@ -276,17 +276,17 @@ public class ImportDynamicDataCVS {
         replicate = validReplicate(key, value);
 
 
-        if(key == REPLICATE_POSITION && !value.trim().equalsIgnoreCase(REPLICATE)  && value.trim().length() >  0){
+        if (key == replicate_position && !value.trim().equalsIgnoreCase(REPLICATE) && value.trim().length() > 0) {
             return String.valueOf(replicate);
         }
-        if(key == BLA_POSITION && !value.trim().equalsIgnoreCase(BLA) && value.trim().length() > 0){
+        if (key == BLA_POSITION && !value.trim().equalsIgnoreCase(BLA) && value.trim().length() > 0) {
             return removeCharacter(value);
         }
 
-        if(key == LIMS_ID_POSITION && !value.trim().equalsIgnoreCase(LIMS_ID) && value.trim().length() > 0 ){
-            if(!isValidSample(value.trim())){
-                System.out.println(DRIVER_NAME+":::ERROR:: Sample id =" + value + " is not Valid" );
-                throw new SapphireException(DRIVER_NAME+":::ERROR:: Sample Id =[" +value + "] is not valid, transaction will be aborted");
+        if (key == LIMS_ID_POSITION && !value.trim().equalsIgnoreCase(LIMS_ID) && value.trim().length() > 0) {
+            if (!isValidSample(value.trim())) {
+                System.out.println(DRIVER_NAME + ":::ERROR:: Sample id =" + value + " is not Valid");
+                throw new SapphireException(DRIVER_NAME + ":::ERROR:: Sample Id =[" + value + "] is not valid, transaction will be aborted");
             }
 
         }
@@ -297,17 +297,17 @@ public class ImportDynamicDataCVS {
 
     private static int validReplicate(Integer key, String value) {
 
-        if(key == LIMS_ID_POSITION && value.trim().equalsIgnoreCase("LIMS ID")){
+        if (key == LIMS_ID_POSITION && value.trim().equalsIgnoreCase("LIMS ID")) {
             pivotSampleRefence = "";
             pivotReplicateReference = 0;
         }
 
-        if(key == LIMS_ID_POSITION && !value.trim().equalsIgnoreCase("LIMS ID")  && value.trim().length() >  0){
+        if (key == LIMS_ID_POSITION && !value.trim().equalsIgnoreCase("LIMS ID") && value.trim().length() > 0) {
 
-            if(!pivotSampleRefence.equals(value)){
+            if (!pivotSampleRefence.equals(value)) {
                 pivotSampleRefence = value;
-                pivotReplicateReference= LIMS_ID_POSITION;
-            }else {
+                pivotReplicateReference = LIMS_ID_POSITION;
+            } else {
                 pivotReplicateReference++;
             }
         }
@@ -315,34 +315,33 @@ public class ImportDynamicDataCVS {
     }
 
 
-    private static Map<Integer, String> getParamNameAndPosition(String[] arrays){
+    private static Map<Integer, String> getParamNameAndPosition(String[] arrays) {
         Map<Integer, String> parameter = new HashMap<>();
-        for(int index = 0; index < arrays.length; index++){
-                parameter.put(index, arrays[index]);
+        for (int index = 0; index < arrays.length; index++) {
+            parameter.put(index, arrays[index]);
         }
 
         return parameter;
     }
 
 
-
     private static String characterLimit(String value) {
-        if (value.trim().length() > CHARACTER_LIMIT){
+        if (value.trim().length() > CHARACTER_LIMIT) {
             return value.trim().substring(0, CHARACTER_LIMIT);
         }
         return value;
     }
 
-    private static String removeCharacter(String value){
+    private static String removeCharacter(String value) {
         String data = value.trim();
-        if(data.contains(BLA)){
+        if (data.contains(BLA)) {
             return data.substring(EXCLUDE_SAMPLE_COLUMN, value.length());
         }
         return data;
     }
 
 
-    private static Map<Integer, Map<Integer, String>> getDataFile(Integer index, Map<Integer, String> resource){
+    private static Map<Integer, Map<Integer, String>> getDataFile(Integer index, Map<Integer, String> resource) {
         Map<Integer, Map<Integer, String>> dataFileReturn = new HashMap<>();
         dataFileReturn.put(index, resource);
         return dataFileReturn;
@@ -357,19 +356,17 @@ public class ImportDynamicDataCVS {
         sql.append(" where s_sampleid = '");
         sql.append(sampleId).append("' ");
 
-        //System.out.println("Valid Sample sql="+sql);
+
         DataSet dsSample = utils.getSqlDataSet(sql.toString());
 
 
-        if (dsSample.getRowCount()<= 0){
-            isValidSaple =  false;
+        if (dsSample.getRowCount() <= 0) {
+            isValidSaple = false;
         }
 
         return isValidSaple;
     }
-    
-
-
 
 
 }
+

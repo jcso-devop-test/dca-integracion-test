@@ -7,9 +7,9 @@ public class Main {
 
         String[] nextRecord;
 
-        //String pathFile = "C:\\Thin Film Tensile 2_1.csv";
-        String pathFile = "C:\\Fiber Tensile 1_1.csv";
-        DataSet dataSet = ImportDynamicDataCVS.processRawData(pathFile);
+        //String pathFile = "C:\\Thin Film Tensile 2_1.csv"; Thin Film Tensile 2_1.csv
+        String pathFile = "C:\\Heinsohn\\Personal\\Documentos DCA\\Integracion\\Thin Film Tensile 2_1.csv";
+        DataSet dataSet = ImportInstronTensile.processRawData(pathFile, "","",""); //ImportDynamicDataCVS.processRawData(pathFile);
     }
 
 }
